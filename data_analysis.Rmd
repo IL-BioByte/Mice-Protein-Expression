@@ -1,0 +1,95 @@
+---
+title: "Mice Protein Expression Analysis"
+author: "Yilan Li"
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    toc: yes
+    code_folding: hide
+    collapse: true
+    fig_width: 6
+    fig_height: 4
+    locale: en_US.UTF-8
+---
+
+```{r,message=FALSE, warning=FALSE}
+library(tidyverse)
+data <- read.csv("data.csv")
+```
+
+## Data Description
+
+This dataset comes from the **UC Machine Learning Repository** [Mice Protein Expression](https://archive.ics.uci.edu/dataset/342/mice+protein+expression). It consists of expression levels of 77 proteins modifications that produced signals in the nuclear fraction of the cortex. The dataset includes measurements from **38 control mice** and **34 trisomic mice** (Down syndrome).
+
+```{r}
+data
+```
+
+### What are the columns represent
+
+**Mouse ID**: Unique identifier for each mouse, **15 measurements** were taken for each protein per mouse.
+
+**Expression Levels**: The dataset contains values for the expression levels of **77 proteins**.
+
+**Genotype**: The genotype of each mouse, either **control (c)** or **trisomy (t)**.
+
+**Treatment Type**: The treatment administered to the mouse, either **memantine (m)** or **saline (s)**.
+
+**Behavior**: Describes the behavioral context of each mouse, either **context-shock (CS)** or **shock-context (SC)**.
+
+### Classes
+
+The mice are classified into eight groups based on features such as **genotype**, **behavior**, and **treatment**. The genotypes can either be **control** or **trisomic**. In terms of behavior, some mice have been stimulated to learn (context-shock), while others have not (shock-context). Additionally, in order to assess the effect of the drug **memantine** on the ability to learn in trisomic mice, some mice were injected with the drug, and others were injected with saline as control.
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(data, aes(class)) +
+  geom_bar(aes(fill = class), alpha = 0.8) +
+  scale_fill_grey (start = 0.8, end = 0.2) +
+  labs(title = "Number of Classes", y = "Count", x="Class")
+```
+
+-   **c-CS-s**: Control mice, stimulated to learn, injected with saline (9 mice)
+
+-   **c-CS-m**: Control mice, stimulated to learn, injected with memantine (10 mice)
+
+-   **c-SC-s**: Control mice, not stimulated to learn, injected with saline (9 mice)
+
+-   **c-SC-m**: Control mice, not stimulated to learn, injected with memantine (10 mice)
+
+-   **t-CS-s**: Trisomic mice, stimulated to learn, injected with saline (7 mice)
+
+-   **t-CS-m**: Trisomic mice, stimulated to learn, injected with memantine (9 mice)
+
+-   **t-SC-s**: Trisomic mice, not stimulated to learn, injected with saline (9 mice)
+
+-   **t-SC-m**: Trisomic mice, not stimulated to learn, injected with memantine (9 mice)
+
+## Data Cleaning and handle missing values
+
+The dataset contains some missing values. In this case, we will handle the missing values by replacing them with the mean of the corresponding protein group.
+
+```{r,message=FALSE, warning=FALSE}
+missing_values <- data %>%
+  setNames(gsub("_N", "", names(.))) %>%
+  summarise(across(everything(), ~ sum(is.na(.)), .names = "{.col}")) %>%
+  pivot_longer(everything(), names_to = "key", values_to = "missing") %>%
+  mutate(
+    total = nrow(data),
+    pct = (missing / total) * 100,
+    isna = missing > 0
+  ) %>%
+  filter(isna) %>%
+  arrange(desc(pct))
+
+percentage.plot <- missing_values %>%
+  ggplot(aes(x = reorder(key, pct), y = pct)) +
+  geom_bar(stat = 'identity', fill = 'darkred', alpha = 1) +
+  scale_x_discrete(limits = missing_values$key) +
+  coord_flip() +
+  labs(title = "Missing Values In the Dataset", x = 'Protein Name', y = "Percentage of Missing Values") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  guides(fill = "none")
+percentage.plot
+
+```
