@@ -93,3 +93,32 @@ percentage.plot <- missing_values %>%
 percentage.plot
 
 ```
+
+```{r,message=FALSE, warning=FALSE}
+data <- data %>%
+  group_by(class) %>%
+  mutate(across(everything(), ~ replace(., is.na(.), mean(., na.rm = TRUE)))) %>%
+  as.data.frame()
+
+names(data) <- gsub("_N", "", names(data))
+proteins <- names(data[2:78])
+classes <- as.vector(unique(as.character(data$class)))
+```
+
+## Data Visualization
+### Histogram for expression levels {.tabset .tabset-pills}
+
+```{r}
+for(i in 1:length(proteins)){
+  cat("####", proteins[i], "{.tabset .tabset-pills}\n")
+  plot <- ggplot(data, aes(eval(parse(text = proteins[i])))) +
+    geom_histogram(aes(fill = after_stat(count)), color = "black", alpha = 0.5) +
+    scale_fill_gradient("Count", low = "blue", high = "red") +
+    labs(title = proteins[i],
+         x = "Expression Level",
+         y = "Count") +
+    theme_minimal()
+  print(plot)
+  cat('\n\n')
+}
+```
