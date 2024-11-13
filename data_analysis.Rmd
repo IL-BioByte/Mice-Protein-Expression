@@ -6,6 +6,7 @@ output:
     df_print: paged
     theme: darkly
     toc: yes
+    toc_folate: yes
     code_folding: hide
     collapse: true
     fig_width: 6
@@ -43,9 +44,11 @@ data
 The mice are classified into eight groups based on features such as **genotype**, **behavior**, and **treatment**. The genotypes can either be **control** or **trisomic**. In terms of behavior, some mice have been stimulated to learn (context-shock), while others have not (shock-context). Additionally, in order to assess the effect of the drug **memantine** on the ability to learn in trisomic mice, some mice were injected with the drug, and others were injected with saline as control.
 
 ```{r, message=FALSE, warning=FALSE}
+blue_palette <- colorRampPalette(c("darkblue", "lightblue"))(8)
+
 ggplot(data, aes(class)) +
   geom_bar(aes(fill = class), alpha = 0.8) +
-  scale_fill_grey (start = 0.8, end = 0.2) +
+  scale_fill_manual(values = blue_palette) +
   labs(title = "Number of Classes", y = "Count", x="Class")
 ```
 
@@ -84,14 +87,13 @@ missing_values <- data %>%
 
 percentage.plot <- missing_values %>%
   ggplot(aes(x = reorder(key, pct), y = pct)) +
-  geom_bar(stat = 'identity', fill = 'darkred', alpha = 1) +
+  geom_bar(stat = 'identity', fill = 'blue', alpha = 1) +
   scale_x_discrete(limits = missing_values$key) +
   coord_flip() +
   labs(title = "Missing Values In the Dataset", x = 'Protein Name', y = "Percentage of Missing Values") +
   theme(plot.title = element_text(hjust = 0.5)) + 
   guides(fill = "none")
 percentage.plot
-
 ```
 
 ```{r,message=FALSE, warning=FALSE}
@@ -106,19 +108,104 @@ classes <- as.vector(unique(as.character(data$class)))
 ```
 
 ## Data Visualization
-### Histogram for expression levels {.tabset .tabset-pills}
 
-```{r}
+### Histogram for Expression Levels {.tabset .tabset-fade .tabset-pills}
+
+```{r, results='asis', warning = FALSE, message = FALSE}
 for(i in 1:length(proteins)){
-  cat("####", proteins[i], "{.tabset .tabset-pills}\n")
   plot <- ggplot(data, aes(eval(parse(text = proteins[i])))) +
-    geom_histogram(aes(fill = after_stat(count)), color = "black", alpha = 0.5) +
-    scale_fill_gradient("Count", low = "blue", high = "red") +
+    geom_histogram(aes(fill=..count..), color = "black", alpha = 0.5) +
+    scale_fill_gradient("Count", low="blue", high="darkblue") +
     labs(title = proteins[i],
-         x = "Expression Level",
-         y = "Count") +
-    theme_minimal()
+         x = "Protein Expression Level",
+         y = "Frequency") +
+    theme_light()
+  cat("#### ", proteins[i], "\n")
   print(plot)
   cat('\n\n')
+}
+```
+
+### Boxplot for Distribution of Protein Expression Level by Class {.tabset .tabset-fade .tabset-pills}
+
+```{r, results='asis', warning = FALSE, message = FALSE}
+for(i in 1:length(proteins)){
+  plot <- ggplot(data, aes(x = class, y = eval(parse(text = proteins[i])))) +
+    geom_boxplot(aes(fill = class), alpha = 0.8) +
+    stat_summary(fun.y=mean, colour="black", geom="point", size=1.5) +
+    labs(y = proteins[i]) +
+    scale_fill_manual(values = blue_palette)
+  cat("#### ", proteins[i], "\n")
+  print(plot)
+  cat('\n\n')
+}
+```
+Outliers will be removed before performing Anova and tukey's HSD.
+
+### Anova and TukeyHSD Test {.tabset .tabset-fade .tabset-pills}
+
+```{r, results='asis', warning = FALSE, message = FALSE}
+library(broom)
+
+alpha <- 0.01
+
+aov_test <- function(prot) {
+  aov_result <- aov(eval(parse(text = prot)) ~ class, data)
+  tidy(aov_result)
+}
+
+tukey_test <- function(aov_result) {
+  TukeyHSD(aov_result)$class
+}
+
+AOV_df <- data.frame(matrix(NA, nrow = length(proteins), ncol = 3))
+names(AOV_df) <- c("Protein", "Var_expl", "p.value")
+
+for (i in 1:length(proteins)) {
+  cat("#### ", proteins[i], "\n")
+  aov_result <- aov(eval(parse(text = proteins[i])) ~ class, data)
+  AOV <- tidy(aov_result)
+  
+  AOV_df$Protein[i] <- proteins[i]
+  AOV_df$Var_expl[i] <- round(AOV$sumsq[1] / (AOV$sumsq[1] + AOV$sumsq[2]), 2)
+  AOV_df$p.value[i] <- AOV$p.value[1]
+  
+  cat(paste0("Total variability:  ", round(AOV$sumsq[1] + AOV$sumsq[2], 2)), "\n")
+    cat('\n\n')
+  cat(paste0("Percentage of explained variability for ", proteins[i], ":  ", round(AOV$sumsq[1] * 100 / (AOV$sumsq[1] + AOV$sumsq[2]), 2), "%\n"))
+    cat('\n\n')
+  cat(paste0("P value for ", proteins[i], ":  ", round(AOV$p.value[1], 5)), "\n\n")
+    cat('\n\n')
+  
+  if (AOV$p.value[1] < alpha) {
+    cat("Significant ANOVA result; proceeding to Tukey HSD test for ", proteins[i], "\n")
+    tukey_result <- tukey_test(aov_result)
+    print(tukey_result)
+  } else {
+    cat("No significant ANOVA result; skipping Tukey HSD test for ", proteins[i], "\n")
+  }
+  
+  cat('\n\n')
+}
+```
+
+
+```{r, results='asis', warning = FALSE, message = FALSE}
+for (i in 1:length(proteins)) {
+  cat("#### ", proteins[i], "\n")
+  
+  # Perform ANOVA
+  aov_result <- aov(eval(parse(text = proteins[i])) ~ class, data = data)
+  
+  # Output the ANOVA summary
+  print(summary(aov_result))
+  
+  # Perform Tukey's HSD if ANOVA is significant
+  if (summary(aov_result)[[1]][["Pr(>F)"]][1] < 0.05) {
+    tukey_result <- TukeyHSD(aov_result)
+    print(tukey_result)
+  }
+  
+  cat("\n\n")
 }
 ```
