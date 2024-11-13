@@ -9,8 +9,8 @@ output:
     toc_folate: yes
     code_folding: hide
     collapse: true
-    fig_width: 6
-    fig_height: 4
+    fig_width: 10
+    fig_height: 8
     locale: en_US.UTF-8
 ---
 
@@ -21,13 +21,13 @@ data <- read.csv("data.csv")
 
 ## Data Description
 
-This dataset comes from the **UC Machine Learning Repository** [Mice Protein Expression](https://archive.ics.uci.edu/dataset/342/mice+protein+expression). It consists of expression levels of 77 proteins modifications that produced signals in the nuclear fraction of the cortex. The dataset includes measurements from **38 control mice** and **34 trisomic mice** (Down syndrome).
+This dataset comes from the **UC Machine Learning Repository** [Mice Protein Expression](https://archive.ics.uci.edu/dataset/342/mice+protein+expression). It consists of expression levels of 77 proteins modifications that produced signals in the nuclear fraction of the cortex. The dataset includes measurements from **38 control mice** and **34 trisomic mice** (Down syndrome), as discussed in the study by @doi:10.1371/journal.pone.0129126.
 
 ```{r}
 data
 ```
 
-### What are the columns represent
+### What are the columns represent?
 
 **Mouse ID**: Unique identifier for each mouse, **15 measurements** were taken for each protein per mouse.
 
@@ -39,9 +39,9 @@ data
 
 **Behavior**: Describes the behavioral context of each mouse, either **context-shock (CS)** or **shock-context (SC)**.
 
-### Classes
+### Eight Classes
 
-The mice are classified into eight groups based on features such as **genotype**, **behavior**, and **treatment**. The genotypes can either be **control** or **trisomic**. In terms of behavior, some mice have been stimulated to learn (context-shock), while others have not (shock-context). Additionally, in order to assess the effect of the drug **memantine** on the ability to learn in trisomic mice, some mice were injected with the drug, and others were injected with saline as control.
+The mice are classified into eight groups based on features such as **genotype**, **behavior**, and **treatment**.
 
 ```{r, message=FALSE, warning=FALSE}
 blue_palette <- colorRampPalette(c("darkblue", "lightblue"))(8)
@@ -67,6 +67,42 @@ ggplot(data, aes(class)) +
 -   **t-SC-s**: Trisomic mice, not stimulated to learn, injected with saline (9 mice)
 
 -   **t-SC-m**: Trisomic mice, not stimulated to learn, injected with memantine (9 mice)
+
+### Two Genotype
+The genotypes can either be **control** or **trisomic**. 
+
+```{r,message=FALSE, warning=FALSE}
+ggplot(data, aes(x = Genotype, fill = class)) +
+  geom_bar(position = "dodge") +
+  scale_fill_manual(values = blue_palette) +
+  labs(title = "Classes for feature: Genotype", x = "Class", y = "Frequency") +
+  theme_minimal() +
+  theme(legend.position = c(1.01, 0.8), legend.justification = c(0, 0.5))
+```
+
+### Two Behavior
+In terms of behavior, some mice have been stimulated to learn (context-shock), while others have not (shock-context). 
+
+```{r,message=FALSE, warning=FALSE}
+ggplot(data, aes(x = Behavior, fill = class)) +
+  geom_bar(position = "dodge") +
+  scale_fill_manual(values = blue_palette) +
+  labs(title = "Classes for feature: Behavior", x = "Class", y = "Frequency") +
+  theme_minimal() +
+  theme(legend.position = c(1.01, 0.8), legend.justification = c(0, 0.5))
+```
+
+### Treatment and Control
+In order to assess the effect of the drug **memantine** on the ability to learn in trisomic mice, some mice were injected with the drug, and others were injected with saline as control.
+
+```{r,message=FALSE, warning=FALSE}
+ggplot(data, aes(x = Treatment, fill = class)) +
+  geom_bar(position = "dodge") +
+  scale_fill_manual(values = blue_palette) +
+  labs(title = "Classes for feature: Treatment", x = "Class", y = "Frequency") +
+  theme_minimal() +
+  theme(legend.position = c(1.01, 0.8), legend.justification = c(0, 0.5))
+```
 
 ## Data Cleaning and handle missing values
 
@@ -111,11 +147,13 @@ classes <- as.vector(unique(as.character(data$class)))
 
 ### Histogram for Expression Levels {.tabset .tabset-fade .tabset-pills}
 
+This histogram displays the distribution of protein expression levels across all samples. It shows the frequency of expression values within specified intervals (bins), allowing for an understanding of the overall data distribution. The shape of the histogram reveals patterns such as skewness, central tendency, and the spread of expression levels, providing insights into how proteins are expressed in the dataset. This visualization helps identify any potential trends, outliers, or clusters in the expression levels.
+
 ```{r, results='asis', warning = FALSE, message = FALSE}
 for(i in 1:length(proteins)){
   plot <- ggplot(data, aes(eval(parse(text = proteins[i])))) +
     geom_histogram(aes(fill=..count..), color = "black", alpha = 0.5) +
-    scale_fill_gradient("Count", low="blue", high="darkblue") +
+    scale_fill_gradient("Count", low="blue", high="black") +
     labs(title = proteins[i],
          x = "Protein Expression Level",
          y = "Frequency") +
@@ -127,6 +165,8 @@ for(i in 1:length(proteins)){
 ```
 
 ### Boxplot for Distribution of Protein Expression Level by Class {.tabset .tabset-fade .tabset-pills}
+
+This boxplot illustrates the distribution of protein expression levels across different classes. Each box represents the range of expression values for a specific protein, showing the median, interquartile range (IQR), and potential outliers. The plot allows for easy comparison of protein expression patterns between classes, highlighting variations and trends in the data. By visualizing the spread and central tendency of expression levels, this boxplot helps identify proteins with significantly different expression across the classes.
 
 ```{r, results='asis', warning = FALSE, message = FALSE}
 for(i in 1:length(proteins)){
@@ -140,72 +180,76 @@ for(i in 1:length(proteins)){
   cat('\n\n')
 }
 ```
-Outliers will be removed before performing Anova and tukey's HSD.
 
-### Anova and TukeyHSD Test {.tabset .tabset-fade .tabset-pills}
+### Principal Component Analysis (PCA) of Sample Data by Class
 
-```{r, results='asis', warning = FALSE, message = FALSE}
-library(broom)
-
-alpha <- 0.01
-
-aov_test <- function(prot) {
-  aov_result <- aov(eval(parse(text = prot)) ~ class, data)
-  tidy(aov_result)
-}
-
-tukey_test <- function(aov_result) {
-  TukeyHSD(aov_result)$class
-}
-
-AOV_df <- data.frame(matrix(NA, nrow = length(proteins), ncol = 3))
-names(AOV_df) <- c("Protein", "Var_expl", "p.value")
-
-for (i in 1:length(proteins)) {
-  cat("#### ", proteins[i], "\n")
-  aov_result <- aov(eval(parse(text = proteins[i])) ~ class, data)
-  AOV <- tidy(aov_result)
-  
-  AOV_df$Protein[i] <- proteins[i]
-  AOV_df$Var_expl[i] <- round(AOV$sumsq[1] / (AOV$sumsq[1] + AOV$sumsq[2]), 2)
-  AOV_df$p.value[i] <- AOV$p.value[1]
-  
-  cat(paste0("Total variability:  ", round(AOV$sumsq[1] + AOV$sumsq[2], 2)), "\n")
-    cat('\n\n')
-  cat(paste0("Percentage of explained variability for ", proteins[i], ":  ", round(AOV$sumsq[1] * 100 / (AOV$sumsq[1] + AOV$sumsq[2]), 2), "%\n"))
-    cat('\n\n')
-  cat(paste0("P value for ", proteins[i], ":  ", round(AOV$p.value[1], 5)), "\n\n")
-    cat('\n\n')
-  
-  if (AOV$p.value[1] < alpha) {
-    cat("Significant ANOVA result; proceeding to Tukey HSD test for ", proteins[i], "\n")
-    tukey_result <- tukey_test(aov_result)
-    print(tukey_result)
-  } else {
-    cat("No significant ANOVA result; skipping Tukey HSD test for ", proteins[i], "\n")
-  }
-  
-  cat('\n\n')
-}
-```
-
+This PCA plot visualizes the distribution of samples from eight distinct classes based on the first two principal components. Each point represents a sample, and the colors indicate the class to which the sample belongs. The plot provides insights into how the samples are grouped and their variation along the principal components, which can be useful for identifying patterns or clustering trends within the data.
 
 ```{r, results='asis', warning = FALSE, message = FALSE}
-for (i in 1:length(proteins)) {
-  cat("#### ", proteins[i], "\n")
-  
-  # Perform ANOVA
-  aov_result <- aov(eval(parse(text = proteins[i])) ~ class, data = data)
-  
-  # Output the ANOVA summary
-  print(summary(aov_result))
-  
-  # Perform Tukey's HSD if ANOVA is significant
-  if (summary(aov_result)[[1]][["Pr(>F)"]][1] < 0.05) {
-    tukey_result <- TukeyHSD(aov_result)
-    print(tukey_result)
-  }
-  
-  cat("\n\n")
-}
+library(ggfortify)
+library(plotly)
+
+df <- data[2:78]  
+pca_res <- prcomp(df, scale. = TRUE, rank. = 2)
+
+pca_plot <- autoplot(pca_res, data = data, colour = 'class', frame = TRUE, frame.type = 'norm')
+
+interactive_pca <- ggplotly(pca_plot, tooltip = "text")
+
+interactive_pca <- interactive_pca %>%
+  layout(
+    title = "PCA Analysis of Protein Expression by Class", 
+    hovermode = "closest",
+    margin = list(
+      l = 80,  
+      r = 80,  
+      b = 80,  
+      t = 80
+ ))
+
+interactive_pca
 ```
+### ANOVA and Tukey's HSD Test for Expression Levels
+This analysis involves examining differences in expression levels across genotypes using ANOVA, followed by Tukey's Honest Significant Difference (HSD) test for pairwise comparisons. Due to file size limit, this part is now moved to separate file.
+
+## Classification of Mice by Protein Expressions
+### Option 1: Decision Tree
+Based on the result the decision tree has a really bad fit and low accuracy. Due to the file size limit this code and results is now moved to separate python file on git.
+```{r, results='asis', warning = FALSE, message = FALSE}
+library(caret)
+library(rpart)
+library(randomForest)
+
+data$class <- as.factor(data$class)
+X <- data[ , -which(names(data) %in% c("class"))]
+y <- data$class
+
+m <- ncol(data) 
+dt_model <- train(class ~ ., data = na.omit(data[ , -((m-3):(m-1))]), method = 'rpart', 
+                  trControl = trainControl(method = "cv", number = 10))
+```
+
+### Option 2: Random Forest
+It appears that tuning mtry to 48 provides the most stable and accurate model performance in this grid search.
+Due to the file size limit this code and results is now moved to separate python file on git.
+
+## Result
+### Proteins Discriminating Learning Success in Control Mice
+The comparison of control mice that successfully learned (c-CS-s and c-CS-m) to those that did not undergo training (c-SC-s and c-SC-m) identified several proteins significantly associated with learning. A total of 31 proteins showed significant differences between the groups of mice that underwent successful learning versus those that did not. Proteins such as BRAF, ERK, and pERK, components of the MAPK signaling pathway, were identified. This pathway is well-established in its role in synaptic plasticity and learning. Immediate early gene proteins like EGR1 and BDNF were found to be elevated in the successful learning groups.
+
+### Proteins Associated with Normal vs. Failed Learning
+When comparing successful learning with saline treatment (c-CS-s) to the non-stimulated control mice (c-SC-s), there were 24 proteins that were significantly different, including DYRK1A, SOD1, and ITSN1, all of which were previously implicated in learning and memory functions. But in Ts65Dn mice, learning failure (c-CS-s) was associated with a distinct protein signature, with proteins like APP and DYRK1A showing upregulated expression, which are known to be linked to cognitive deficits in Down syndrome.
+
+### Influence of Memantine on Learning-Related Proteins
+Memantine is an NMDAR antagonist, was shown to influence the protein expression associated with learning. Such asproteins like NR1, which is a subunit of the NMDAR, and its phosphorylated form pNR1, were significantly modulated by memantine treatment. Other proteins, such as NUMB and CAMKII, which interact with and modulate NMDAR signaling, were also affected by memantine treatment.
+
+### Proteins Associated with Learning in Trisomic Mice
+When comparing t-CS-s (failed learning) vs. t-SC-s (non-learning), there were 10 proteins with significant expression differences, including DYRK1A, ITSN1, pERK, BRAF, and SOD1. Some of these proteins were also altered in normal learning of control mice, indicating that even in failed learning, trisomic mice exhibited some normal protein responses.
+
+
+When comparing t-CS-m (rescued learning) vs. t-SC-m (non-learning with memantine), 36 proteins were significantly different, with 17 showing similar changes to those in normal control mice, suggesting that memantine promotes more normal responses but not entirely. A similar comparison of t-CS-m vs. t-SC-s (non-learning with saline)identified 20 proteins, further showing how memantine rescued learning by altering protein profiles.
+
+
+Memantine alone (t-SC-m vs. t-SC-s) influenced 12 proteins, such as pNR2A, pPKCAB, and ARC, some of which were also present in control mice. The comparison of rescued (t-CS-m) vs. failed learning (t-CS-s) showed only 9 significant proteins, indicating that while memantine could rescue some aspects of learning, it didn't fully restore normal protein expression levels.
+
+
